@@ -102,8 +102,8 @@ Hierbij hoort ook telkens het documenteren van deze stappen (screenshots + probl
 	- [x] Windows 11 Enterprise box downloaden (versie 2607.1.0)
 	- [x] Beide boxes exporteren naar een `.box` bestand en veilig bewaren
 - [x] Basis Vagrantfile van Orion downloaden
-- [ ] Git-repo aanmaken voor scripts (versiebeheer + backup)
-- [ ] VirtualBox DHCP-server op het host-only netwerk **uitschakelen**
+- [x] Git-repo aanmaken voor scripts (versiebeheer + backup)
+- [x] VirtualBox DHCP-server op het host-only netwerk **uitschakelen**
 - [ ] Mappenstructuur `scripts/` opzetten:
 	- [ ] Vagrantfile
 	- [ ] Centraal configbestand (domeinnaam, IP's, wachtwoorden op één plek)
