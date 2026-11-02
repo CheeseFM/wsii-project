@@ -68,6 +68,17 @@ else {
     Set-DnsClientServerAddress -InterfaceIndex $hoIdx -ResetServerAddresses
     # The client must not register itself in DNS.
     Set-DnsClient -InterfaceIndex $hoIdx -RegisterThisConnectionsAddress $false
+
+    # Wait for a lease from server3: without it the client can't reach
+    # server1 over the host-only network, and the domain join fails.
+    for ($i = 1; -not ($lease = Get-NetIPAddress -InterfaceIndex $hoIdx -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object PrefixOrigin -eq 'Dhcp'); $i++) {
+        if ($i -gt 24) { throw 'No DHCP lease on the host-only adapter after 2 minutes: is server3 (DHCP) running?' }
+        if ($i % 6 -eq 1) { ipconfig /renew Host-Only | Out-Null }
+        Write-Host 'Waiting for a DHCP lease from server3...'
+        Start-Sleep -Seconds 5
+    }
+    Write-Host "DHCP lease: $($lease.IPAddress)"
 }
 
 # Lower metric = preferred. Domain names must be resolved via the host-only

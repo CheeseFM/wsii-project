@@ -186,31 +186,40 @@ Hierbij hoort ook telkens het documenteren van deze stappen (screenshots + probl
 	- [x] DHCP geen DNS-records laten registreren voor clients
 
 ## Client - [[#Management tools|RSAT tools]]
-- [ ] Host-only adapter op DHCP, controleren dat IP in `.100 - .150` valt
-- [ ] DNS-registratie uitschakelen op beide adapters
-- [ ] Toevoegen aan domein en rebooten
-- [ ] Enkel de nodige RSAT tools installeren:
-	- [ ] Active Directory
-	- [ ] DNS
-	- [ ] DHCP
-	- [ ] Certificate Services
-	- [ ] Group Policy Management
-- [ ] Controleren dat het CA-certificaat vertrouwd wordt
+- [x] Host-only adapter op DHCP, controleren dat IP in `.100 - .150` valt
+	- *`base.ps1` wacht op een lease van server3 (anders faalt de join). Kreeg `192.168.26.100`.*
+- [x] DNS-registratie uitschakelen op beide adapters
+	- *Gecontroleerd op server1: geen A- of PTR-record voor de client.*
+- [x] Toevoegen aan domein en rebooten
+- [x] Enkel de nodige RSAT tools installeren:
+	- *Duurt ~1 uur via Windows Update (traagste stap). `Rsat.ServerManager.Tools` komt automatisch mee.*
+	- [x] Active Directory
+	- [x] DNS
+	- [x] DHCP
+	- [x] Certificate Services
+	- [x] Group Policy Management
+- [x] Controleren dat het CA-certificaat vertrouwd wordt
+	- *Via de GPO; gecontroleerd in `01-rsat.ps1`.*
 
 ## Firewall
-- [ ] Default policy op alle servers: inkomend blokkeren, uitgaand toelaten, firewall aan
-- [ ] WinRM openlaten, anders verliest Vagrant de verbinding
+- [x] Default policy op alle servers: inkomend blokkeren, uitgaand toelaten, firewall aan
+- [x] WinRM openlaten, anders verliest Vagrant de verbinding
+	- *`firewall.ps1` zet de toegelaten groepen (incl. WinRM) eerst aan, pas daarna wordt de rest uitgezet.*
 - [ ] Lijst opstellen en motiveren in readme:
+	- *Lijst staat (met motivatie) in `config.psd1`; nog in de readme zetten.*
 
-| Server  | Nodig verkeer                                                                          |
-| ------- | -------------------------------------------------------------------------------------- |
-| Alle    | WinRM, ping, (SSH optioneel)                                                           |
-| server1 | DNS, Kerberos, RPC, LDAP, Global Catalog, SMB, tijdsynchronisatie, HTTP                |
-| server2 | DNS, RPC (beheer via RSAT)                                                             |
-| server3 | DHCP, HTTP (CertSrv), RPC (certificaataanvragen + beheer), SMB                         |
+| Server  | Toegelaten inkomend (regelgroepen)                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| Alle    | Windows Remote Management, Core Networking (DHCP-client op NAT, IPv6), OpenSSH Server, ping (eigen regel) |
+| server1 | Active Directory Domain Services (LDAP, GC, RPC, SMB 445 voor SYSVOL, W32Time), AD Web Services, Kerberos KDC, DNS Service, HTTP |
+| server2 | DNS Service (53 + RPC voor beheer)                                                                    |
+| server3 | DHCP Server, DHCP Server Management (RPC console), Certification Authority (DCOM/RPC), HTTP (CertSrv) |
 
-- [ ] Waar mogelijk ingebouwde regelgroepen gebruiken
-- [ ] Testen dat alles werkt met firewall aan
+	- *Geen SMB op server3: certificaataanvragen gaan via DCOM/RPC, CRL/AIA via HTTP/LDAP.*
+	- *Expliciet uitgezet: Remote Desktop, File and Printer Sharing, DFS/File Replication, WMI, mDNS, AllJoyn, Delivery Optimization, HTTPS/QUIC, `WinRM-Packer`/`OpenSSH-Packer` (extra regels van de box).*
+- [x] Waar mogelijk ingebouwde regelgroepen gebruiken
+- [x] Testen dat alles werkt met firewall aan
+	- *`client/02-verify.ps1`: 12 tests vanaf de client als domain admin, alles OK. Ook notify server1 → server2 en GPO op server2/3 OK.*
 
 ## Testen
 - [ ] Volledige uitrol van nul zonder manuele fixes

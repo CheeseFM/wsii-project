@@ -86,11 +86,15 @@
         Port     = 80
     }
 
-    # Inbound firewall per node. Default policy: block inbound, allow outbound.
+    # Inbound firewall per server (common\firewall.ps1). Default policy: block
+    # inbound, allow outbound. Only the groups/rules below are allowed inbound:
+    # every other enabled inbound allow rule (from roles or the Vagrant box,
+    # e.g. Remote Desktop, File and Printer Sharing, WinRM-Packer) is disabled.
     # Groups = built-in Windows firewall rule groups (DisplayGroup), enabled as a whole.
     #   Some groups only exist after the matching role is installed,
-    #   so apply the firewall at the end of each server script.
+    #   so the firewall is the last step per server.
     # Rules  = custom rules for traffic without a suitable built-in group.
+    # The client keeps its default Windows firewall (assignment: servers only).
     Firewall = @{
         DefaultInbound  = 'Block'
         DefaultOutbound = 'Allow'
@@ -99,18 +103,21 @@
         Common = @{
             Groups = @(
                 'Windows Remote Management'    # WinRM 5985: Vagrant + remote PowerShell
+                'Core Networking'              # DHCP client on the NAT adapter (UDP 68), IPv6 basics
+                'OpenSSH Server'               # 22: vagrant ssh (troubleshooting)
             )
             Rules = @(
+                # Ping (IPv4 echo request): troubleshooting + demo
                 @{ Name = 'WS2-Ping-In'; Protocol = 'ICMPv4'; IcmpType = '8' }
             )
         }
 
         server1 = @{
             Groups = @(
-                'Active Directory Domain Services'    # LDAP, GC, RPC, SMB (SYSVOL/GPO), W32Time
+                'Active Directory Domain Services'    # LDAP, GC, RPC, SAM/LSA + SMB 445 (SYSVOL/GPO), W32Time, NetBIOS
                 'Active Directory Web Services'       # 9389: RSAT AD PowerShell / ADAC
                 'Kerberos Key Distribution Center'    # 88: authentication
-                'DNS Service'                         # 53 + RPC for DNS Manager
+                'DNS Service'                         # 53 (queries + zone transfer to server2) + RPC for DNS Manager
                 'World Wide Web Services (HTTP)'      # 80: intranet site
             )
             Rules = @()
@@ -118,16 +125,17 @@
 
         server2 = @{
             Groups = @(
-                'DNS Service'                         # 53 (queries + zone transfer) + RPC
+                'DNS Service'                         # 53 (queries + notify from server1) + RPC for DNS Manager
             )
             Rules = @()
         }
 
         server3 = @{
             Groups = @(
-                'DHCP Server'                         # 67/68 + RPC for DHCP console
-                'Certification Authority'             # RPC/DCOM certificate requests
-                'World Wide Web Services (HTTP)'      # 80: /CertSrv web enrollment
+                'DHCP Server'                         # 67/68 (+ 547 DHCPv6): handing out leases
+                'DHCP Server Management'              # RPC for the DHCP console on the client
+                'Certification Authority'             # DCOM/RPC: certificate requests + CA console
+                'World Wide Web Services (HTTP)'      # 80: /CertSrv web enrollment, CRL/AIA download
             )
             Rules = @()
         }

@@ -51,6 +51,8 @@ Vagrant.configure("2") do |config|
     server1.vm.provision "iis", type: "shell", run: "never", inline: "C:\\vagrant\\server1\\04-iis.ps1"
     # GPO: CA root certificate trusted by every machine - only after the CA on server3 exists
     server1.vm.provision "ca-gpo", type: "shell", run: "never", inline: "C:\\vagrant\\server1\\05-ca-trust-gpo.ps1"
+    # Firewall: last step (some rule groups only exist after their role)
+    server1.vm.provision "firewall", type: "shell", run: "never", inline: "C:\\vagrant\\common\\firewall.ps1 -Node server1"
     # VirtualBox specific configuration
     server1.vm.provider "virtualbox" do |vb|
       # VirtualBox Display Name
@@ -74,6 +76,7 @@ Vagrant.configure("2") do |config|
     server2.vm.provision "join", type: "shell", inline: "C:\\vagrant\\common\\join-domain.ps1 -Node server2", reboot: true
     # Secondary zones for the forward + reverse zone, master = server1
     server2.vm.provision "dns", type: "shell", inline: "C:\\vagrant\\server2\\01-dns-secondary.ps1"
+    server2.vm.provision "firewall", type: "shell", inline: "C:\\vagrant\\common\\firewall.ps1 -Node server2"
     server2.vm.provider "virtualbox" do |vb|
       vb.name = "server2"
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]
@@ -93,6 +96,7 @@ Vagrant.configure("2") do |config|
     server3.vm.provision "ca", type: "shell", inline: "C:\\vagrant\\server3\\01-ca.ps1"
     # DHCP for the host-only network (the client)
     server3.vm.provision "dhcp", type: "shell", inline: "C:\\vagrant\\server3\\02-dhcp.ps1"
+    server3.vm.provision "firewall", type: "shell", inline: "C:\\vagrant\\common\\firewall.ps1 -Node server3"
     server3.vm.provider "virtualbox" do |vb|
       vb.name = "server3"
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]
@@ -106,7 +110,13 @@ Vagrant.configure("2") do |config|
     client.vm.box = "gusztavvargadr/windows-11-25h2-enterprise"
     client.vm.box_version = "2607.1.0"
     client.vm.network "private_network", ip: "192.168.26.40", auto_config: false
+    # RSAT first: needs only internet, not the domain, so deploy.ps1 runs it
+    # in parallel with the servers (Windows Update takes up to an hour)
+    client.vm.provision "rsat", type: "shell", inline: "C:\\vagrant\\client\\01-rsat.ps1"
     client.vm.provision "base", type: "shell", inline: "C:\\vagrant\\common\\base.ps1 -Node client", reboot: true
+    client.vm.provision "join", type: "shell", inline: "C:\\vagrant\\common\\join-domain.ps1 -Node client", reboot: true
+    # End-to-end test of every service from the client, through the server firewalls
+    client.vm.provision "verify", type: "shell", inline: "C:\\vagrant\\client\\02-verify.ps1"
     client.vm.provider "virtualbox" do |vb|
       vb.name = "client"
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]

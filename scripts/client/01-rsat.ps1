@@ -2,21 +2,33 @@
 #   - only the tools needed for the demo:
 #     AD, DNS, DHCP, Certificate Services, Group Policy Management
 #
-# Prerequisites: base + domain join done, IP received via DHCP (server3).
-# RSAT is a Windows "capability" downloaded via Windows Update (internet via NAT).
+# Needs only internet (via NAT), not the domain: runs as the FIRST client step,
+# so deploy.ps1 can install it in parallel with the servers. RSAT is a Windows
+# "capability" downloaded via Windows Update: this takes up to an hour.
+# The client checks (IP, CA trusted, ...) are in 02-verify.ps1.
+# Safe to run multiple times.
 
 $ErrorActionPreference = 'Stop'
-. "$PSScriptRoot\..\common\config.ps1"
-$cfg = Get-LabConfig
 
 Write-Host '=== RSAT tools ==='
 
-# TODO: list of capabilities, e.g.
-#       Rsat.ActiveDirectory.DS-LDS.Tools, Rsat.Dns.Tools, Rsat.DHCP.Tools,
-#       Rsat.CertificateServices.Tools, Rsat.GroupPolicy.Management.Tools
+$tools = @(
+    'Rsat.ActiveDirectory.DS-LDS.Tools'      # Users and Computers, AD PowerShell
+    'Rsat.Dns.Tools'                         # DNS Manager (+ dnscmd)
+    'Rsat.DHCP.Tools'                        # DHCP console
+    'Rsat.CertificateServices.Tools'         # Certification Authority console
+    'Rsat.GroupPolicy.Management.Tools'      # GPMC
+)
 
-# TODO: install each one that isn't installed yet (Get-WindowsCapability -Online / Add-WindowsCapability)
-
-# TODO: check: host-only IP in .100 - .150, CA root certificate in Cert:\LocalMachine\Root
+foreach ($tool in $tools) {
+    $capability = Get-WindowsCapability -Online -Name "$tool*"
+    if (-not $capability) { throw "Capability $tool not found" }
+    if ($capability.State -ne 'Installed') {
+        Write-Host "Installing $($capability.Name) ($(Get-Date -Format HH:mm))"
+        Add-WindowsCapability -Online -Name $capability.Name | Out-Null
+    }
+}
+Get-WindowsCapability -Online -Name 'Rsat.*' | Where-Object State -eq 'Installed' |
+    Format-Table Name, State -AutoSize | Out-String | Write-Host
 
 Write-Host '=== RSAT tools done ==='
