@@ -3,7 +3,9 @@
 #  2026-2027
 # ------------------------------------
 #                                      
-# This is the Vagrantfile for the assignment of Windows Server II - 2025-2026. 
+# This is the Vagrantfile for the assignment of Windows Server II - 2026-2027.
+# The placeholder IPs below only tell VirtualBox which host-only network to use
+# (192.168.26.0/24, host = 192.168.26.1). The real IPs are set by PowerShell (see config.psd1).
 # The setup consists of 3 Windows Server machines (no GUI) and 1 Windows 11 client.
 #
 # Use `vagrant up` to bring up the environment, 
@@ -29,9 +31,24 @@ Vagrant.configure("2") do |config|
     server1.vm.box = "gusztavvargadr/windows-server-2025-standard-core"
     server1.vm.box_version = "2607.0.0"
     # Connect the second adapter to an internal network, do not configure IP (the provided IP is just a place holder)
-    server1.vm.network "private_network", ip: "192.168.25.10", auto_config: false
-    # Set the host name of the VM
-    server1.vm.hostname = "server1"
+    server1.vm.network "private_network", ip: "192.168.26.10", auto_config: false
+    # Hostname is set by common\base.ps1 (from config.psd1), not by Vagrant
+    # Basic configuration: hostname, network, DNS client
+    server1.vm.provision "base", type: "shell", inline: "C:\\vagrant\\common\\base.ps1 -Node server1", reboot: true
+    # Active Directory: new forest + DNS. The script only schedules the
+    # promotion; server1 promotes and reboots itself after Vagrant is done
+    # (no reboot: true, see 01-adds.ps1).
+    server1.vm.provision "adds", type: "shell", inline: "C:\\vagrant\\server1\\01-adds.ps1"
+    # Steps after the promotion use run: "never": Vagrant may not contact
+    # server1 until it has rebooted. Run them with a second command
+    # (adds again: removes the task and shows the promotion log):
+    #   vagrant provision server1 --provision-with adds,dns,users,iis
+    # DNS: NAT IP out of DNS, reverse zone, A/PTR per server, NS + zone transfers
+    server1.vm.provision "dns", type: "shell", run: "never", inline: "C:\\vagrant\\server1\\02-dns.ps1"
+    # OUs and users from ous.psd1
+    server1.vm.provision "users", type: "shell", run: "never", inline: "C:\\vagrant\\server1\\03-ous-users.ps1"
+    # IIS: Hello World site on http://intranet.<domain>
+    server1.vm.provision "iis", type: "shell", run: "never", inline: "C:\\vagrant\\server1\\04-iis.ps1"
     # VirtualBox specific configuration
     server1.vm.provider "virtualbox" do |vb|
       # VirtualBox Display Name
@@ -39,7 +56,7 @@ Vagrant.configure("2") do |config|
       # VirtualBox Group
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]
       # 2GB vRAM
-      vb.memory = "2048"
+      vb.memory = "6144"
       # 2vCPU
       vb.cpus = "2"
     end
@@ -49,12 +66,16 @@ Vagrant.configure("2") do |config|
   config.vm.define "server2" do |server2|
     server2.vm.box = "gusztavvargadr/windows-server-2025-standard-core"
     server2.vm.box_version = "2607.0.0"
-    server2.vm.network "private_network", ip: "192.168.25.20", auto_config: false
-    server2.vm.hostname = "server2"
+    server2.vm.network "private_network", ip: "192.168.26.20", auto_config: false
+    server2.vm.provision "base", type: "shell", inline: "C:\\vagrant\\common\\base.ps1 -Node server2", reboot: true
+    # Domain member (no DC!) - needs server1 to be done
+    server2.vm.provision "join", type: "shell", inline: "C:\\vagrant\\common\\join-domain.ps1 -Node server2", reboot: true
+    # Secondary zones for the forward + reverse zone, master = server1
+    server2.vm.provision "dns", type: "shell", inline: "C:\\vagrant\\server2\\01-dns-secondary.ps1"
     server2.vm.provider "virtualbox" do |vb|
       vb.name = "server2"
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]
-      vb.memory = "2048"
+      vb.memory = "6144"
       vb.cpus = "2"
     end
   end
@@ -63,12 +84,12 @@ Vagrant.configure("2") do |config|
   config.vm.define "server3" do |server3|
     server3.vm.box = "gusztavvargadr/windows-server-2025-standard-core"
     server3.vm.box_version = "2607.0.0"
-    server3.vm.network "private_network", ip: "192.168.25.30", auto_config: false
-    server3.vm.hostname = "server3"
+    server3.vm.network "private_network", ip: "192.168.26.30", auto_config: false
+    server3.vm.provision "base", type: "shell", inline: "C:\\vagrant\\common\\base.ps1 -Node server3", reboot: true
     server3.vm.provider "virtualbox" do |vb|
       vb.name = "server3"
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]
-      vb.memory = "2048"
+      vb.memory = "8192"
       vb.cpus = "2"
     end
   end
@@ -77,8 +98,8 @@ Vagrant.configure("2") do |config|
   config.vm.define "client" do |client|
     client.vm.box = "gusztavvargadr/windows-11-25h2-enterprise"
     client.vm.box_version = "2607.1.0"
-    client.vm.network "private_network", ip: "192.168.25.40", auto_config: false
-    client.vm.hostname = "client"
+    client.vm.network "private_network", ip: "192.168.26.40", auto_config: false
+    client.vm.provision "base", type: "shell", inline: "C:\\vagrant\\common\\base.ps1 -Node client", reboot: true
     client.vm.provider "virtualbox" do |vb|
       vb.name = "client"
       vb.customize ["modifyvm", :id, "--groups", "/WS2"]

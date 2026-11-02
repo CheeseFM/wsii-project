@@ -104,57 +104,62 @@ Hierbij hoort ook telkens het documenteren van deze stappen (screenshots + probl
 - [x] Basis Vagrantfile van Orion downloaden
 - [x] Git-repo aanmaken voor scripts (versiebeheer + backup)
 - [x] VirtualBox DHCP-server op het host-only netwerk **uitschakelen**
-- [ ] Mappenstructuur `scripts/` opzetten:
-	- [ ] Vagrantfile
-	- [ ] Centraal configbestand (domeinnaam, IP's, wachtwoorden op één plek)
-	- [ ] Apart bestand voor OU's en gebruikers (eenvoudig aanpasbaar)
-	- [ ] Map met gedeelde functies (IP instellen, hostname, firewall)
-	- [ ] Map per VM (server1, server2, server3, client)
+- [x] Mappenstructuur `scripts/` opzetten:
+	- [x] Vagrantfile
+	- [x] Centraal configbestand (domeinnaam, IP's, wachtwoorden op één plek)
+	- [x] Apart bestand voor OU's en gebruikers (eenvoudig aanpasbaar)
+	- [x] Map met gedeelde functies (IP instellen, hostname, firewall)
+	- [x] Map per VM (server1, server2, server3, client)
 - [ ] **Shared folder probleem** oplossen: `C:\vagrant` is niet altijd beschikbaar na reboot/promotie/domain join
-	- [ ] Bij eerste provisioning scripts lokaal kopiëren op de VM
+	- [x] Bij eerste provisioning scripts lokaal kopiëren op de VM
 	- [ ] Vervolgscripts uitvoeren vanuit die lokale kopie
 - [ ] Vagrantfile uitbreiden met provisioners per VM
-	- [ ] Reboots opvangen (opsplitsen in meerdere provisioning-stappen)
+	- [x] Reboots opvangen (opsplitsen in meerdere provisioning-stappen)
 	- [ ] Volgorde VMs vastleggen: server1, server2, server3, client
-- [ ] Mogelijk systeem voorzien om scripts **los** te kunnen uitvoeren, zodat je niet telkens van nul moet starten
+- [x] Mogelijk systeem voorzien om scripts **los** te kunnen uitvoeren, zodat je niet telkens van nul moet starten
+	- *Benoemde provisioners (`vagrant provision server1 --provision-with dns`) + alle scripts idempotent + snapshots (`vagrant snapshot save/restore`).*
 
 ## Gemeenschappelijk (elke server)
-- [ ] Hostname instellen
-- [ ] Host-only adapter identificeren op basis van IP/MAC, niet op naam
-- [ ] Vast IP instellen, **zonder default gateway** op host-only (anders conflict met NAT)
-- [ ] DNS-servers van host-only adapter instellen
-- [ ] NAT-adapter niet laten registreren in DNS
+- [x] Hostname instellen
+- [x] Host-only adapter identificeren op basis van IP/MAC, niet op naam
+- [x] Vast IP instellen, **zonder default gateway** op host-only (anders conflict met NAT)
+- [x] DNS-servers van host-only adapter instellen
+- [x] NAT-adapter niet laten registreren in DNS
 
 ## Server1 - [[#Active Directory]], [[#DNS|Primary DNS]], [[#Webserver|IIS]]
-- [ ] Vast IP `192.168.26.10`, DNS naar zichzelf
-- [ ] AD DS rol installeren
-- [ ] Nieuwe forest aanmaken (`WS26-<initialen>.hogent`, forest + domain level Windows Server 2025) en rebooten
-- [ ] **DNS na promotie**
-	- [ ] DNS-server enkel laten luisteren op host-only IP
-	- [ ] Controleren dat er geen records met het NAT-IP bestaan, anders verwijderen
-	- [ ] Reverse lookup zone aanmaken voor `192.168.26.0/24`
-	- [ ] Exact één A- en één PTR-record per server
-	- [ ] NS-record voor server2 in forward én reverse zone
-	- [ ] Zone transfers + notify naar server2 toestaan (voor beide zones)
-	- [ ] Forwarder voor internetnamen instellen (testen of nodig)
+- [x] Vast IP `192.168.26.10`, DNS naar zichzelf
+- [x] AD DS rol installeren
+- [x] Nieuwe forest aanmaken (`WS26-<initialen>.hogent`, forest + domain level Windows Server 2025) en rebooten
+- [x] **DNS na promotie**
+	- [x] DNS-server enkel laten luisteren op host-only IP
+	- [x] Controleren dat er geen records met het NAT-IP bestaan, anders verwijderen
+		- *Verwijderd en gecontroleerd door `02-dns.ps1`. Getest na reboot van server1: `10.0.2.15` blijft weg.*
+	- [x] Reverse lookup zone aanmaken voor `192.168.26.0/24`
+	- [x] Exact één A- en één PTR-record per server
+		- *Script maakt A + PTR voor alle 3 servers aan vanuit `config.psd1` en controleert dit op het einde.*
+	- [x] NS-record voor server2 in forward én reverse zone
+	- [x] Zone transfers + notify naar server2 toestaan (voor beide zones)
+		- *`TransferToZoneNameServer` + `Notify`. Getest: tijdelijk CNAME op server1 stond na ~5 s op server2.*
+	- [x] Forwarder voor internetnamen instellen (testen of nodig)
+		- *Getest: niet nodig, root hints via NAT werken. De promotie had de DNS-servers van de host-provider (`195.130.x`) als forwarder gezet; die zijn verwijderd (werken niet op een ander netwerk). Goed voor de readme.*
 - [ ] **OU's en gebruikers**
-	- [ ] Minstens 3 OU's
-	- [ ] Minstens 2 gebruikers in Domain Admins
-	- [ ] Minstens 2 gewone Domain Users
+	- [x] Minstens 3 OU's
+	- [x] Minstens 2 gebruikers in Domain Admins
+	- [x] Minstens 2 gewone Domain Users
 	- [ ] Wachtwoorden noteren voor readme
-- [ ] **IIS**
-	- [ ] Webserver-rol installeren
-	- [ ] Statische Hello World-pagina op poort 80
-	- [ ] DNS-record voor `intranet` aanmaken
+- [x] **IIS**
+	- [x] Webserver-rol installeren
+	- [x] Statische Hello World-pagina op poort 80
+	- [x] DNS-record voor `intranet` aanmaken
 - [ ] **GPO voor CA-vertrouwen** (pas na installatie CA op server3)
 	- [ ] Root-certificaat via GPO verspreiden naar Trusted Root Certification Authorities
 
 ## Server2 - [[#DNS|Secundary DNS]]
-- [ ] Vast IP `192.168.26.20`, DNS naar server1
-- [ ] Toevoegen aan domein en rebooten (**geen** domeincontroller!)
-- [ ] DNS-rol installeren
-- [ ] Secondary zones aanmaken voor forward en reverse zone, met server1 als master
-- [ ] Testen: record op server1 toevoegen en controleren of het op server2 verschijnt
+- [x] Vast IP `192.168.26.20`, DNS naar server1
+- [x] Toevoegen aan domein en rebooten (**geen** domeincontroller!)
+- [x] DNS-rol installeren
+- [x] Secondary zones aanmaken voor forward en reverse zone, met server1 als master
+- [x] Testen: record op server1 toevoegen en controleren of het op server2 verschijnt
 
 ## Server3 - [[#Certificate Authority|CA]], [[#DHCP]]
 - [ ] Vast IP `192.168.26.30`, DNS naar server1 en server2
@@ -205,7 +210,8 @@ Hierbij hoort ook telkens het documenteren van deze stappen (screenshots + probl
 ## Testen
 - [ ] Volledige uitrol van nul zonder manuele fixes
 - [ ] Duur van volledige uitrol noteren (handig voor video)
-- [ ] Commando voor tijdelijk DNS-record (CNAME) voorbereiden voor de demo
+- [x] Commando voor tijdelijk DNS-record (CNAME) voorbereiden voor de demo
+	- *Server1: `Add-DnsServerResourceRecordCName -ZoneName WS26-JDV.hogent -Name demotest -HostNameAlias ad-web-dns.WS26-JDV.hogent.` → server2: `Get-DnsServerResourceRecord -ZoneName WS26-JDV.hogent -Name demotest`*
 
 ## Finalisatie
 - [ ] **readme.pdf** (max. 8 pagina's, naam + klasgroep vermelden, enkel PDF)
