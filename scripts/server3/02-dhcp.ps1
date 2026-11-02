@@ -5,33 +5,82 @@
 #   - DHCP doesn't register DNS records for clients
 #
 # Prerequisites: base + domain join done.
-# Authorizing in AD requires a domain admin (see 01-ca.ps1).
+# Authorizing in AD requires a domain admin (see common\domain-admin.ps1).
+# Safe to run multiple times.
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\..\common\config.ps1"
-$cfg  = Get-LabConfig
-$dhcp = $cfg.Dhcp
-$me   = $cfg.Nodes.server3
+. "$PSScriptRoot\..\common\domain-admin.ps1"
+$cfg     = Get-LabConfig
+$dhcp    = $cfg.Dhcp
+$me      = $cfg.Nodes.server3
+$fqdn    = "$($me.Hostname).$($cfg.Domain.Name)"
+$scopeId = $cfg.Network.NetworkId
+$dns     = $cfg.Nodes[$cfg.Dns.PrimaryNode].IP, $cfg.Nodes[$cfg.Dns.SecondaryNode].IP
 
 Write-Host "=== DHCP: scope $($dhcp.StartRange) - $($dhcp.EndRange) ==="
 
-# TODO: install DHCP role if not installed yet
+if (-not (Get-WindowsFeature DHCP).Installed) {
+    Write-Host 'Installing DHCP role'
+    Install-WindowsFeature DHCP -IncludeManagementTools | Out-Null
+}
 
-# TODO: DHCP security groups (netsh dhcp add securitygroups) + restart service,
-#       and clear the Server Manager "configuration required" notification
+# --- Post-install configuration ----------------------------------------------
+# Local groups DHCP Administrators / DHCP Users, and mark the post-install
+# configuration as done so Server Manager stops showing its notification.
+if (-not (Get-LocalGroup 'DHCP Administrators' -ErrorAction SilentlyContinue)) {
+    Write-Host 'Creating DHCP security groups'
+    netsh dhcp add securitygroups | Out-Null
+    Restart-Service DHCPServer
+}
+Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12' -Name ConfigurationState -Value 2
 
-# TODO: authorize in AD with domain admin credentials, if not authorized yet
-#       (Add-DhcpServerInDC -DnsName <FQDN> -IPAddress $me.IP)
+# --- Only on the host-only network -------------------------------------------
+# Never hand out addresses on the NAT network.
+foreach ($binding in Get-DhcpServerv4Binding) {
+    $wanted = $binding.InterfaceAlias -eq 'Host-Only'
+    if ($binding.BindingState -ne $wanted) {
+        Write-Host "DHCP binding $($binding.InterfaceAlias): $wanted"
+        Set-DhcpServerv4Binding -InterfaceAlias $binding.InterfaceAlias -BindingState $wanted | Out-Null
+    }
+}
 
-# TODO: bind DHCP only to the host-only adapter, never to NAT
+# --- Authorize in AD ---------------------------------------------------------
+if (-not (Get-DhcpServerSetting).IsAuthorized) {
+    Write-Host "Authorizing $fqdn in AD (as domain admin)"
+    Invoke-AsDomainAdmin -Config $cfg -Parameters @{ Fqdn = $fqdn; IP = $me.IP } -ScriptBlock {
+        Add-DhcpServerInDC -DnsName $Fqdn -IPAddress $IP
+    }
+    Restart-Service DHCPServer
+}
 
-# TODO: scope if it doesn't exist yet ($dhcp.StartRange/EndRange/SubnetMask/LeaseDuration)
+# --- Scope -------------------------------------------------------------------
+if (-not (Get-DhcpServerv4Scope -ScopeId $scopeId -ErrorAction SilentlyContinue)) {
+    Write-Host "Creating scope $scopeId ($($dhcp.StartRange) - $($dhcp.EndRange))"
+    Add-DhcpServerv4Scope -Name $dhcp.ScopeName -StartRange $dhcp.StartRange -EndRange $dhcp.EndRange `
+        -SubnetMask $dhcp.SubnetMask -LeaseDuration ([TimeSpan]$dhcp.LeaseDuration) -State Active
+}
 
-# TODO: exclusion range $dhcp.ExclusionStart - $dhcp.ExclusionEnd
+$exclusion = Get-DhcpServerv4ExclusionRange -ScopeId $scopeId |
+    Where-Object { "$($_.StartRange)" -eq $dhcp.ExclusionStart -and "$($_.EndRange)" -eq $dhcp.ExclusionEnd }
+if (-not $exclusion) {
+    Write-Host "Exclusion $($dhcp.ExclusionStart) - $($dhcp.ExclusionEnd)"
+    Add-DhcpServerv4ExclusionRange -ScopeId $scopeId -StartRange $dhcp.ExclusionStart -EndRange $dhcp.ExclusionEnd
+}
 
-# TODO: options: 006 = primary + secondary DNS IP, 015 = $cfg.Domain.Name
-#       (no 003 router: the host-only network has no uplink)
+# 006 DNS servers + 015 DNS domain name. No 003 router: the host-only network
+# has no uplink, clients reach the internet via their own NAT adapter.
+Set-DhcpServerv4OptionValue -ScopeId $scopeId -DnsServer $dns -DnsDomain $cfg.Domain.Name -Force
 
-# TODO: no DNS registration for clients (Set-DhcpServerv4DnsSetting -DynamicUpdates Never)
+# Clients don't end up in DNS, not even via DHCP
+Set-DhcpServerv4DnsSetting -DynamicUpdates Never
+
+# --- Result (for the demo) ---------------------------------------------------
+Write-Host "Authorized: $((Get-DhcpServerSetting).IsAuthorized)"
+Get-DhcpServerv4Scope -ScopeId $scopeId |
+    Format-Table ScopeId, Name, StartRange, EndRange, SubnetMask, State, LeaseDuration -AutoSize | Out-String | Write-Host
+Get-DhcpServerv4ExclusionRange -ScopeId $scopeId | Format-Table -AutoSize | Out-String | Write-Host
+Get-DhcpServerv4OptionValue -ScopeId $scopeId |
+    Format-Table OptionId, Name, @{ n = 'Value'; e = { $_.Value -join ', ' } } -AutoSize | Out-String | Write-Host
 
 Write-Host '=== DHCP done ==='

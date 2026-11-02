@@ -151,8 +151,9 @@ Hierbij hoort ook telkens het documenteren van deze stappen (screenshots + probl
 	- [x] Webserver-rol installeren
 	- [x] Statische Hello World-pagina op poort 80
 	- [x] DNS-record voor `intranet` aanmaken
-- [ ] **GPO voor CA-vertrouwen** (pas na installatie CA op server3)
-	- [ ] Root-certificaat via GPO verspreiden naar Trusted Root Certification Authorities
+- [x] **GPO voor CA-vertrouwen** (pas na installatie CA op server3)
+	- [x] Root-certificaat via GPO verspreiden naar Trusted Root Certification Authorities
+		- *GPO "Trust WS26-JDV Root CA", gelinkt aan het domein (`05-ca-trust-gpo.ps1`). Getest op server1, 2 en 3; client nog te controleren.*
 
 ## Server2 - [[#DNS|Secundary DNS]]
 - [x] Vast IP `192.168.26.20`, DNS naar server1
@@ -162,23 +163,27 @@ Hierbij hoort ook telkens het documenteren van deze stappen (screenshots + probl
 - [x] Testen: record op server1 toevoegen en controleren of het op server2 verschijnt
 
 ## Server3 - [[#Certificate Authority|CA]], [[#DHCP]]
-- [ ] Vast IP `192.168.26.30`, DNS naar server1 en server2
-- [ ] Toevoegen aan domein en rebooten
-- [ ] **CA** (uitvoeren als domain admin)
-	- [ ] CA-rol en Web Enrollment installeren
-	- [ ] Enterprise Root CA configureren
-	- [ ] Web Enrollment configureren
-	- [ ] Testen of `http://<FQDN server3>/CertSrv` werkt
+- [x] Vast IP `192.168.26.30`, DNS naar server1 en server2
+- [x] Toevoegen aan domein en rebooten
+- [x] **CA** (uitvoeren als domain admin)
+	- [x] CA-rol en Web Enrollment installeren
+	- [x] Enterprise Root CA configureren
+	- [x] Web Enrollment configureren
+		- *Server 2025 eist standaard HTTPS voor `/CertSrv` (403.4, bescherming tegen NTLM relay / ESC8). Opdracht vraagt `http://`, dus voor `/CertSrv` uitgezet: bewuste afweging, vermelden in readme.*
+	- [x] Testen of `http://<FQDN server3>/CertSrv` werkt
+		- *Vanaf host als `sanne.maes`: HTTP 200, zonder login 401.*
 - [ ] **DHCP**
-	- [ ] DHCP-rol installeren en autoriseren in AD
-	- [ ] Security groups aanmaken en Server Manager-melding wegwerken
-	- [ ] Scope `192.168.26.100 - .200` aanmaken
-	- [ ] Exclusion range `192.168.26.151 - .200`
+	- [x] DHCP-rol installeren en autoriseren in AD
+		- *Autoriseren via `Invoke-AsDomainAdmin` (scheduled task als domain admin): `Add-DhcpServerInDC` heeft geen `-Credential`, en `Invoke-Command` faalt op het double-hop probleem.*
+	- [x] Security groups aanmaken en Server Manager-melding wegwerken
+	- [x] Scope `192.168.26.100 - .200` aanmaken
+	- [x] Exclusion range `192.168.26.151 - .200`
 	- [ ] Opties bewust kiezen en motiveren in readme:
-		- [ ] DNS-servers (server1 en server2)
-		- [ ] DNS-domeinnaam
-		- [ ] Router-optie bewust weglaten (host-only heeft geen uplink)
-	- [ ] DHCP geen DNS-records laten registreren voor clients
+		- *Ingesteld in `02-dhcp.ps1`; motivatie nog in de readme schrijven.*
+		- [x] DNS-servers (server1 en server2)
+		- [x] DNS-domeinnaam
+		- [x] Router-optie bewust weglaten (host-only heeft geen uplink)
+	- [x] DHCP geen DNS-records laten registreren voor clients
 
 ## Client - [[#Management tools|RSAT tools]]
 - [ ] Host-only adapter op DHCP, controleren dat IP in `.100 - .150` valt

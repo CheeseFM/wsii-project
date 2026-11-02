@@ -13,6 +13,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\config.ps1"
+. "$PSScriptRoot\domain-admin.ps1"
 $cfg     = Get-LabConfig
 $zone    = $cfg.Domain.Name
 $primary = $cfg.Nodes[$cfg.Dns.PrimaryNode].IP
@@ -33,10 +34,7 @@ for ($i = 1; -not (Resolve-DnsName "_ldap._tcp.dc._msdcs.$zone" -Type SRV -Serve
 }
 
 # Joining requires domain credentials: the local vagrant user has no rights in AD.
-$password   = ConvertTo-SecureString $cfg.Domain.AdministratorPassword -AsPlainText -Force
-$credential = New-Object PSCredential("$($cfg.Domain.NetBiosName)\Administrator", $password)
-
 Write-Host "Joining $env:COMPUTERNAME to $zone"
-Add-Computer -DomainName $zone -Credential $credential -Force
+Add-Computer -DomainName $zone -Credential (Get-DomainAdminCredential -Config $cfg) -Force
 
 Write-Host '=== Domain join done, reboot required ==='
